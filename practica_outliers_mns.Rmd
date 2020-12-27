@@ -1,0 +1,391 @@
+---
+title: "Práctica Ouliers"
+author: "Francisco Javier Gómez Sánchez"
+date: "16/12/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+source("Outliers/OutliersLibrerias.R")
+source("Outliers/OutliersFunciones_byCubero.R")
+```
+
+
+```{r echo=FALSE, message=FALSE}
+library(R.matlab)
+```
+
+# Dataset y Selección de Variables
+
+Cargamos el dataset. Consiste en 6 variables que caracterizan el estado vertebral de un pacinte 
+y la variable outlier que nos dice si el valor es anómalo (1) o normal (0). En un principio no vamos a trabajar con 
+esta última variable. Por lo tanto, vamos a eliminarla
+```{r, message=FALSE}
+vertebral <- readMat("vertebral.mat")
+vertebral.df <- as.data.frame(vertebral)
+colnames(vertebral.df)<- c("pelvic_incidence","pelvic_tilt","lumbar_angle",
+                           "sacral_slope", "pelvic_radius", "spondylolisthesis_grade", 
+                           "outlier")
+vertebral.df <- subset(vertebral.df, select = c("pelvic_incidence","pelvic_tilt", 
+                                                "lumbar_angle", "sacral_slope",
+                                                "pelvic_radius","spondylolisthesis_grade"))
+summary(vertebral.df)
+```
+
+Construimos un dataframe con las columnas que son numéricas
+```{r}
+columnas.num <- sapply(c(1:ncol(vertebral.df)) , function(x) is.numeric(
+  vertebral.df[, x]))
+vertebral.df.num <- vertebral.df[, columnas.num]
+head(vertebral.df.num)
+
+```
+Vamos que todas las variables son numéricas, por lo que en este paso no se elimina ninguna.
+Ninguna presenta pocos valores distintos, por lo que por ahora trabajo con las 6 clases
+
+# Detección de outliers en una dimensión
+## Outliers IQR
+
+```{r, message=FALSE, results="hide"}
+par(mfrow = c(2,3))
+sapply(c(1:(ncol(vertebral.df.num)-1)) , function(x) hist(vertebral.df.num[, x],
+                                                          main = "", xlab=colnames(
+                                                            vertebral.df.num)[x]))
+
+```
+
+Como se puede ver en las gráficas de arriba, no hay ningun histograma extraño. vamos a suponer que todas las variables se asemejan a una distrinución normal (aunque presenten pequeñas variaciones), por lo que trabajaremos con todas ellas.
+
+### Obtención de los outliers IQR
+```{r}
+cuartil.primero <- quantile(vertebral.df.num[, 1], 0.25)
+mediana <- quantile(vertebral.df.num[, 1], 0.5)
+cuartil.tercero <- quantile(vertebral.df.num[, 1], 0.75)
+iqr <- cuartil.tercero - cuartil.primero
+
+extremo.superior.outlier.IQR <- cuartil.tercero + 1.5*iqr
+extremo.inferior.outlier.IQR <- cuartil.primero - 1.5*iqr 
+extremo.superior.outlier.IQR.extremo <- cuartil.tercero + 3*iqr
+extremo.inferior.outlier.IQR.extremo <- cuartil.primero - 3*iqr 
+
+son.outliers.IQR <- vertebral.df.num[, 1] < extremo.inferior.outlier.IQR | 
+  vertebral.df.num[, 1] > extremo.superior.outlier.IQR
+son.outliers.IQR.extremos <- vertebral.df.num[, 1] < extremo.inferior.outlier.IQR.extremo | 
+  vertebral.df.num[, 1] > extremo.superior.outlier.IQR.extremo
+
+```
+
+### Índices y valores de los outliers IQR
+
+```{r}
+claves.outliers.IQR <- which(son.outliers.IQR)
+df.outliers.IQR <- vertebral.df.num[claves.outliers.IQR,]
+nombres.outliers.IQR <- row.names(df.outliers.IQR)
+valores.outliers.IQR <- df.outliers.IQR[, 1]
+
+claves.outliers.IQR.extremos <- which(son.outliers.IQR.extremos)
+df.outliers.IQR.extremos <- vertebral.df.num[claves.outliers.IQR.extremos,]
+nombres.outliers.IQR.extremos <- row.names(df.outliers.IQR.extremos)
+valores.outliers.IQR.extremos <- df.outliers.IQR.extremos[, 1]
+
+
+claves.outliers.IQR
+df.outliers.IQR
+nombres.outliers.IQR 
+valores.outliers.IQR 
+
+claves.outliers.IQR.extremos 
+df.outliers.IQR.extremos
+nombres.outliers.IQR.extremos 
+valores.outliers.IQR.extremos
+
+```
+
+Se han encontrado valores outliers, pero no valores outliers extremos, como se puede ver arriba.
+
+### Desviación de los outliers con respecto a la media de la columna
+
+Normalizamos los datos y luego trabajamos con la primera variable del dataset (pelvic_incidence), que, además, es con la que se ha trabajado anteriormente para calcular los distintos quartiles.
+
+```{r}
+vertebral.df.num.norm <- scale(vertebral.df.num)
+
+df.outliers.IQR.norm <- vertebral.df.num.norm[claves.outliers.IQR,]
+nombres.outliers.IQR.norm <- row.names(df.outliers.IQR.norm)
+valores.outliers.IQR.norm <- df.outliers.IQR.norm[, 1]
+valores.outliers.IQR.norm
+```
+
+Ahora se van a mostrar los valores de todas las columnas de las filas con un outlier en la primera variable
+```{r}
+datos.num.norm.outliers.IQR <- df.outliers.IQR.norm
+datos.num.norm.outliers.IQR
+```
+
+### Gráfico
+
+Plot de los outliers
+```{r}
+plot_2_colores(datos=vertebral.df.num.norm[, 1], claves.a.mostrar = claves.outliers.IQR, 
+               titulo = "pelvic_incidence")
+```
+
+
+Plot de los outliers extremos
+```{r}
+plot_2_colores(datos=vertebral.df.num.norm[, 1], claves.a.mostrar = claves.outliers.IQR.extremos,
+               titulo = "pelvic_incidence")
+
+```
+
+
+### Diagramas de caja
+
+```{r}
+diag_caja_outliers_IQR(datos=vertebral.df.num.norm, ind.columna=1, coef.IQR = 1.5)
+```
+
+```{r}
+diag_caja(datos=vertebral.df.num.norm, ind.columna = 1, claves.a.mostrar=c(claves.outliers.IQR))
+```
+
+```{r}
+diag_caja_juntos(datos=vertebral.df.num.norm, titulo = "Outliers en alguna columna",
+                 claves.a.mostrar = claves.outliers.IQR)
+```
+
+Se puede apreciar como los valores de outliers calculados para pelvic_outliers presentan en otras variables valores anómalos.
+
+
+## Trabajando con varias columnas
+### Outliers IQR
+
+```{r, message=FALSE, results="hide", echo=FALSE}
+claves.outliers.IQR.en.alguna.columna = claves_outliers_IQR_en_alguna_columna(
+  vertebral.df.num.norm, 1.5)
+
+claves.outliers.IQR.en.mas.de.una.columna = unique(claves.outliers.IQR.en.alguna.columna[
+  duplicated(claves.outliers.IQR.en.alguna.columna)])
+claves.outliers.IQR.en.alguna.columna = unique(claves.outliers.IQR.en.alguna.columna)
+
+claves.outliers.IQR.en.mas.de.una.columna
+claves.outliers.IQR.en.alguna.columna
+nombres_filas(vertebral.df.num.norm, claves.outliers.IQR.en.mas.de.una.columna)
+nombres_filas(vertebral.df.num.norm, claves.outliers.IQR.en.alguna.columna)
+
+```
+
+
+```{r}
+df.outliers.IQR.en.alguna.columna <- vertebral.df.num.norm[claves.outliers.IQR.en.alguna.columna, ]
+df.outliers.IQR.en.alguna.columna
+```
+
+```{r}
+diag_caja_juntos(datos=vertebral.df.num.norm, titulo = "Outliers en alguna columna",
+                 claves.a.mostrar = claves.outliers.IQR.en.alguna.columna)
+```
+
+
+# Outliers Multivariantes
+## Visualización de un Biplot
+Este método gráfico nos permite tener una idea aproximada de los valores de los registros con respecto a todas las variables, así como las correlaciones entre dichas variables.
+
+```{r echo=FALSE}
+biplot.outliers.IQR = biplot_2_colores(vertebral.df.num, 
+                                       claves.outliers.IQR.en.alguna.columna, 
+                                       titulo.grupo.a.mostrar = "Outliers IQR",
+                                       titulo ="Biplot Outliers IQR")
+biplot.outliers.IQR
+```
+
+La suma de las varianzas es casi del 75%. Esto indica que los datos podrían estar bien representados, ya que los componetes principales presentan una varianza alta. Aunque no se puede asegurar nada sólo con éste análisis. 
+
+## Métodos basados en distancias:LOF
+
+```{r}
+num.vecinos.lof = 5
+lof.scores = lofactor(vertebral.df.num.norm, k = num.vecinos.lof)
+plot(sort(lof.scores, decreasing=TRUE), ylab="lof.scores ordenados")
+
+```
+
+Se puede apreciar un conjunto de 6 valores que destacan sobre los demás. por el range de 2 y un valor extremo, con un valor superior a 6. Vamos a analizar dichos valores.
+
+```{r}
+num.outliers <- 7
+values.outliers.lof <- lof.scores[order(lof.scores, decreasing=TRUE)[1:num.outliers],
+                                  drop=FALSE]
+claves.outliers.lof <- match(values.outliers.lof, lof.scores)
+nombres.outliers.lof <- claves.outliers.lof
+
+vertebral.df.num.norm[claves.outliers.lof,]
+```
+
+Se puede apreciar que el valor del elemento 116 es el que más destaca, presentando varios valores fuera del rango normal. Los valores de 52, 181, y 86 presentan un valor anómalo en una sola de sus variables. 198, 163 y 164, en 2 variables.
+
+
+Se muestran ahora los diagramas de dispersión corespondientes a los cruces 2 a 2 de las variables. Se muestra en rojo el registro correspondiente al elemento más extremo, el 116.
+
+```{r echo=FALSE} 
+
+clave.max.outlier.lof = claves.outliers.lof[1]
+
+colores = rep("black", times = nrow(vertebral.df.num.norm))
+colores[clave.max.outlier.lof] = "red"
+pairs(vertebral.df.num.norm, pch = 19,  cex = 0.5, col = colores, lower.panel = NULL)
+```
+
+Se aprecia una relación directa entre pelvic_incidence con lumbar_angle y sacral_slope. Si nos fijamos en el elemento 116 (en rojo), vemos que en casi todas las gráficas de dispersión se puede considerar anómalo. Esto indica que efectivamente, este elemento es un valor anómalo en el 
+
+Si nos fijamos en lumbar_angle y pelvic_radius, no hay ninguna correlación entre ambas variables, y en este caso, el registro 116 está en una zona central.
+
+
+Ahora vamos a ver de un forma gráfica la interacción de todas las variables mediante un biplot. A diferencia de los diagramas de dispersión, el biplot muestra el comportamiento de los datos con respecto a todas las variables. Sin embargo, la información obtenida no es exacta y es proporcional al porcentaje de variación explicado por las componentes principales. En este caso, la suma de la variabilidad explicada por las dos componentes principales es relativamente baja (No llega al 65%), por lo que no podemos fiarnos realmente de esta gráfica.
+
+```{r echo=FALSE}
+biplot.max.outlier.lof = biplot_2_colores(vertebral.df.num.norm, clave.max.outlier.lof,
+                                          titulo = "Mayor outlier LOF")
+biplot.max.outlier.lof
+```
+
+sin embargo, de nuevo el valor outlier se encuentra fuera de la zona de alta densidad. Aunque la variabilidad de las componentes principales es baja, de nuevo el valor outlier escogido se muestra como anómalo.
+
+
+## Métodos basados en Clustering
+### Clustering usando k-means
+
+A falta de más información, fijamos el número de outliers en 7 y el de clusters en 3.
+```{r}
+num.outliers = 7
+num.clusters = 3
+set.seed(2)
+
+modelo.kmeans <- kmeans(vertebral.df.num.norm, centers = num.clusters)
+asignac.clust <- modelo.kmeans$cluster
+centroides.normalizados <- modelo.kmeans$centers
+
+head(asignac.clust)
+centroides.normalizados
+```
+
+Ahora se calculan los outliers de aquellos datos que más se alejen del centroide del cluster al que ha sido asignado.
+
+```{r}
+top_clustering_outliers = function(datos.normalizados, 
+                                   asignaciones.clustering, 
+                                   datos.centroides.normalizados, 
+                                   num.outliers){
+
+  values.distancias <- distancias_a_centroides(datos.normalizados, asignaciones.clustering, 
+                                               datos.centroides.normalizados)
+  distancias <- values.distancias[order(values.distancias, decreasing=TRUE)[1:num.outliers],
+                                  drop=FALSE]
+  claves <- match(distancias, values.distancias)
+  return(list("claves"=claves, "distancias"=distancias))
+}
+```
+
+```{r}
+top.outliers.kmeans = top_clustering_outliers(vertebral.df.num.norm, 
+                                              asignac.clust,
+                                              centroides.normalizados, 
+                                              num.outliers)
+claves.outliers.kmeans = top.outliers.kmeans$claves 
+nombres.outliers.kmeans = nombres_filas(vertebral.df.num.norm, claves.outliers.kmeans)
+distancias.outliers.centroides = top.outliers.kmeans$distancias
+
+claves.outliers.kmeans
+nombres.outliers.kmeans
+distancias.outliers.centroides
+
+```
+
+A continuación se muestra un biplot con la información de los outliers y de los clusters.
+
+```{r echo=FALSE}
+biplot_outliers_clustering(vertebral.df.num.norm, 
+                           titulo = "Outliers k-means",
+                           asignaciones.clustering = asignac.clust,
+                           claves.outliers = claves.outliers.kmeans)
+```
+
+Se aprecia en el gráfico que el valor del elemento 116 está totalmente alejado de su cluster. Sin embargo, los demás valores anómalos están en la periferia de los clústers.
+
+Diagrama de cajas.
+
+```{r echo=FALSE}
+diag_caja_juntos(vertebral.df.num.norm, "Outliers k-means", claves.outliers.kmeans)
+```
+
+Se ve de nuevo como el valor del elemento 116 es anómalo en la mitad de las variables. Los demás son anómalos, pero no llegan a ser tan extremos como el valor de 116, como se aprecia en las gráficas.
+
+## Ánálisis de los outliers multivariantes puros
+
+```{r}
+claves.outliers.IQR.en.alguna.columna
+claves.outliers.lof
+
+claves.outliers.lof.no.IQR <- setdiff(claves.outliers.lof, claves.outliers.IQR.en.alguna.columna)
+nombres.outliers.lof.no.IQR <- nombres_filas(vertebral.df.num.norm, claves.outliers.lof.no.IQR)
+
+claves.outliers.lof.no.IQR
+nombres.outliers.lof.no.IQR
+```
+
+
+El único outlier LOF multivariante puro es el correspondiente con el elemento 52. Si miramos las gráficas, vemos que no sobresale en exceso en ninguna de las variables, por lo que puede ser un elemento anómalo por estar en el límite de muchas variables.
+
+Se analiza, finalmente, los resultados deel método LOF aumentando el número de outliers a 12.
+```{r}
+
+valores.outliers.lof <- lof.scores[order(lof.scores, decreasing=TRUE)[1:12],drop=FALSE]
+claves.outliers.lof <- match(valores.outliers.lof, lof.scores)
+nombres.outliers.lof <- claves.outliers.lof
+
+claves.outliers.lof.no.IQR <- setdiff(claves.outliers.lof, claves.outliers.IQR.en.alguna.columna)
+nombres.outliers.lof.no.IQR <- nombres_filas(vertebral.df.num.norm, claves.outliers.lof.no.IQR)
+
+claves.outliers.IQR.en.alguna.columna
+claves.outliers.lof
+claves.outliers.lof.no.IQR
+nombres.outliers.lof.no.IQR
+
+biplot.outlier.lof.no.IQR <- biplot_2_colores(vertebral.df.num.norm, claves.outliers.lof.no.IQR,
+                                              titulo = "Outliers LOF 
+                                              (excluidos los que no son IQR)")
+biplot.outlier.lof.no.IQR
+```
+
+De todos los valores, el 144 parece estar en tierra de nadie, El 238 sin embargo está dentro de una nube algo dispersa, pero parece normal. El 58 y el 119 están alejados de una zona de densidad de puntos pero no demasiado. Además, estos 2 últimos están relativamente cerca en el gráfico. Sin embargo, viendo los datos de sus valores normalizados, se aprecia que tienen valores sensiblemente distintos en sus variables. Podemos ver los datos de estos elementos a continuación.
+
+```{r}
+vertebral.df.num.norm[claves.outliers.lof.no.IQR, ]
+```
+
+El valor 144 no tiene ninguna variable anómala, pero la combinación de todas hace que aparentemente no pertenezca a ningún grupo.
+
+## Análisis de los resultados
+
+### Conjunto de datos
+He trabajado con la base de datos "vertebral" de UCL. He trabajado con todas sus variables excepto "outliers", que la he suprimido.
+
+Las variables con las que trabajo son las siguientes: pelvic_incidence, pelvic_tilt, lumbar_angle, sacral_slope, pelvic_radius y spondylolisthesis_grade.
+
+También se han normalizado los datos (mediante z-score) en otra variable para usarlos durante el proyecto.
+
+### Outliers en una variable
+#### Método IQR.
+Se han encontrado 3 valores anómalos. Correspondientes a las entradas 116, 163 y 164 del dataset. Sin embargo, no se han encontrado valores extremos. Entre ellos destaca el 116, con unos valores bastante alejados de la media en las variables pelvic_incidence, sacral_slope y spondylolisthesis_grade. Los demás, algunos se alejan de la media y otros no, pero nunca siendo tan extremos como el 116. En la variable pelvic_incidence se aprecia que los 3 valores detectados presentan valores bastante alejados de la media.
+
+### Outliers multivariantes
+#### Visualización con un biplot.
+La suma de los porcentajes explicados por los dos componentes principales es aceptable (22.1 + 51.7 = 73.8), por lo que la representación obtenida es una aproximación aceptable, pero solo eso. Para que fuera una buena aproximación los valores de las varianzas deberían ser más faltos (cerca de 90 o más).
+
+#### LOF.
+El gráfico de scores mostró un valor extremadamente alto comparado con el resto y un grupo de 6 registros por encima de lo normal. Estos valores corresponden a los elementos 52, 86, 116, 163, 164, 181 y 198. Como vemos, son los 3 que se habian calculado con el método IQR y 4 nuevos. El más alto vuelve a ser el 116. Esto indica que puede ser el elemento con valores más anómalos del dataset. 
+
+#### Métodos basados en clustering.
+Con el método de k-means (ordenando outliers según la distancia euclídea a los centroides) se han detectado como outliers los elementos 116, 163, 198, 96, 76, 52 y 86, Estos casi coinciden con los encontrados mediante LOF. De nuevo el valor má extremo es el 116, situado muy alejado de las zonas de densidad de los clusters. Excepto el valor 52, los demás se encuentran en la periferia de las nubes de puntos. Esto puede ser porque ninguna de las variables de 52 es extrema, pero la combinación de todas hace de él un valor anómalo.
