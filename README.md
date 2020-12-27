@@ -1,4 +1,4 @@
-# Outliers-Analysis
+# R-Outliers-Analysis
 
 Analysis of outliers in a vertebral dataset (it consists of 6 features to caracterize the vertebral state of the patient).
 
